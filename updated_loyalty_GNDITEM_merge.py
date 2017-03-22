@@ -12,26 +12,21 @@ import dask.array as da
 from dask.diagnostics import ProgressBar
 
 
-# In[2]:
 
 import dask.dataframe as dd
 
 
-# In[3]:
-
+#Read in the data
 df = dd.read_csv('GNDITEM.csv')
 
 df1 = pd.read_csv("Loyalty.csv")
 #cat = dd.read_csv('CAT.csv')
 
 
-# In[4]:
-
+#Convert loyalty data to dask dataframe
 sd = dd.from_pandas(df1, npartitions=3)
 
-
-# In[19]:
-
+# convert hours and minutes from float to integer to string
 df.HOUR = df.HOUR.astype(int)
 df.MINUTE = df.MINUTE.astype(int)
 
@@ -39,22 +34,17 @@ df.HOUR = df.HOUR.astype(str)
 df.MINUTE = df.MINUTE.astype(str)
 df.DOB = df.DOB.astype(str)
 
-
-# In[8]:
-
+#combine DOB HOUR and MINUTE into one column
 with ProgressBar():
     df['period'] = df.DOB+' '+df.HOUR+':'+df.MINUTE+':00'
 
 
-# In[11]:
-
+#Convert period column into datetime64 format
 with ProgressBar():
     meta = ('Date', pd.Timestamp)
     df.period = df.period.map_partitions(pd.to_datetime, format = '%Y-%m-%d %H:%M:%S', meta=meta).compute()
 
-
-# In[23]:
-
+#Conver loyalty data columns into strings
 df.dlTableStoreNumber = df.dlTableStoreNumber.astype(str)
 sd.StoreNumber = sd.StoreNumber.astype(str)
 sd.ReceiptNumber = sd.ReceiptNumber.astype(int)
@@ -64,29 +54,17 @@ sd.ReceiptNumber = sd.ReceiptNumber.astype(str)
 right_columns = [ "dlTableStoreNumber", "CHECK", "period"]
 left_columns = ["StoreNumber", "ReceiptNumber", "ReceiptDate"]
 
-
-# In[24]:
-
+#Merge loyalty and GNDITEM based on store number, Receipt number, and date
 r = sd.merge(df, left_on =left_columns, right_on = right_columns, how = 'inner' )
 
-
-# In[ ]:
 
 with ProgressBar():
     r.compute()
 
 
-# In[18]:
-
 sd.head()
 
 
-# In[22]:
-
-
-
-
-# In[ ]:
 
 
 
