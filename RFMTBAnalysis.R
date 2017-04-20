@@ -1,45 +1,93 @@
 require(dplyr)
 require(magrittr)
 require(vcd)
-# data1 <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFM_data.csv')
-# data2 <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/Crosstab of Cat_Item_Age_Sales.csv')
-# 
-# head(data2)
-# 
-# RFM <- merge(data1,data2,by = "CustomerID")
-# nrow(RFM)
-# 
-# #write.csv(RFM, file = 'C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFM_Merge.csv', row.names = TRUE)
-# 
-# data3 <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/src/region.csv', sep = ' ')
-# 
-# uniqueCustomer <- unique(data3$UserId)
-# 
-# uniqueData3 <- data3[!duplicated(data3),]
-# 
-# row.names(uniqueData3) <- NULL
-# 
-# #uniqueData3 <- uniqueData3[,1:2]
-# #colnames(uniqueData3) <- c('RowNum','CustomerID', 'Region')
-# 
-# RFMFeatures <- merge(RFM,uniqueData3, by = "CustomerID")
-# 
-# RFMFeatures <- within(RFMFeatures, rm('X'))
-# 
-# colnames(RFMFeatures) <- c('CustomerID','FirstPurchaseDate','LastPurchaseDate','Frequency','TotalAmount','Recency','Tenure','MonetaryValue','Gender','FirstName','LastName','Generation','CategoryBreadth','UndiscountedTotalSale','TotalItems','UniqueItems','Age','Region')
-# 
-# head(RFMFeatures)
-# 
-# #write.csv(RFMFeatures, file = 'C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFMFeatures.csv', row.names = TRUE)
-# 
-# RFMFeatures <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFMFeatures.csv')
-# 
-# AsofDate <- max(as.Date(RFMFeatures$LastPurchaseDate,'%Y-%m-%d'))
-# 
-# #Recency
-# 
-# RFMFeatureSegs <- data.frame(Recency_weeks = as.numeric(AsOfDate - as.Date(RFMFeatures$LastPurchaseDate,'%Y-%m-%d')) %/% 7)
-# 
+require(MASS)
+
+#Ingest data
+ld <- read.csv('C:/Users/Sriva/Downloads/sqlite-tools-win32-x86-3180000/loyaltyWithGender.csv')
+nrow(ld)
+ldSubset <- ld[,c(6,4,5,3)]
+head(ldSubset)
+
+orders_n <- ldSubset
+orders_n <- na.omit(orders_n)
+
+nrow(orders_n)
+head(orders_n)
+
+RFM_raw <- with(orders_n, data.frame(CustomerID = sort(unique(UserId))))
+RFM_raw <- cbind(RFM_raw, FirstPurchaseDate = with(orders_n, as.Date(as.integer(by(as.Date(ReceiptDate,'%Y-%m-%d'),UserId,min)),"1970-01-01")))
+RFM_raw <- cbind(RFM_raw, LastPurchaseDate = with(orders_n, as.Date(as.integer(by(as.Date(ReceiptDate,'%Y-%m-%d'),UserId,max)),"1970-01-01")))
+RFM_raw <- cbind(RFM_raw, NumberOfOrders = with(orders_n, as.numeric(by(ReceiptNumber, UserId, function(x) length(unique(x))))))
+RFM_raw <- cbind(RFM_raw, TotalAmount = with(orders_n,as.numeric(by(ReceiptAmount,UserId,sum))))
+
+nrow(RFM_raw)
+head(RFM_raw)
+
+#Get the last date of sale in the dataset
+AsOfDate <- max(RFM_raw$LastPurchaseDate)
+#save(RFM_raw, AsOfDate, file = "RFM_raw.Rda")
+
+#Recency
+Recency = as.integer(AsOfDate) - as.integer(RFM_raw$LastPurchaseDate)
+RFM_raw <- cbind(RFM_raw, Recency)
+
+#Frequency
+RFM_raw$Frequency <- RFM_raw$NumberOfOrders
+
+#MonetaryValue
+MonetoryValue <- RFM_raw$TotalAmount / RFM_raw$NumberOfOrders
+RFM_raw <- cbind(RFM_raw, MonetoryValue)
+
+#Tenure
+Tenure = as.integer(AsOfDate) - as.integer(RFM_raw$FirstPurchaseDate)
+RFM_raw <- cbind(RFM_raw, Tenure)
+
+RFM_segs <- data.frame(Recency_weeks = as.numeric(AsOfDate - RFM_raw$LastPurchaseDate) %/% 7)
+row.names(RFM_segs) <- row.names(RFM_raw)
+
+#write.csv(RFM_raw, file = "C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFM_data.csv", row.names = TRUE)
+
+#Merge the RFM data with the customer dataset that has all the customer features with unique items and category per customer
+data1 <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFM_data.csv')
+data2 <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/Crosstab of Cat_Item_Age_Sales.csv')
+
+head(data2)
+
+RFM <- merge(data1,data2,by = "CustomerID")
+nrow(RFM)
+
+#write.csv(RFM, file = 'C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFM_Merge.csv', row.names = TRUE)
+
+data3 <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/src/region.csv', sep = ' ')
+
+uniqueCustomer <- unique(data3$UserId)
+
+uniqueData3 <- data3[!duplicated(data3),]
+
+row.names(uniqueData3) <- NULL
+
+#uniqueData3 <- uniqueData3[,1:2]
+#colnames(uniqueData3) <- c('RowNum','CustomerID', 'Region')
+
+RFMFeatures <- merge(RFM,uniqueData3, by = "CustomerID")
+
+RFMFeatures <- within(RFMFeatures, rm('X'))
+
+colnames(RFMFeatures) <- c('CustomerID','FirstPurchaseDate','LastPurchaseDate','Frequency','TotalAmount','Recency','Tenure','MonetaryValue','Gender','FirstName','LastName','Generation','CategoryBreadth','UndiscountedTotalSale','TotalItems','UniqueItems','Age','Region')
+
+head(RFMFeatures)
+
+#write.csv(RFMFeatures, file = 'C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFMFeatures.csv', row.names = TRUE)
+
+RFMFeatures <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFMFeatures.csv')
+
+AsofDate <- max(as.Date(RFMFeatures$LastPurchaseDate,'%Y-%m-%d'))
+
+#Recency
+
+RFMFeatureSegs <- data.frame(Recency_weeks = as.numeric(AsOfDate - as.Date(RFMFeatures$LastPurchaseDate,'%Y-%m-%d')) %/% 7)
+
 # max(RFMFeatureSegs$Recency_weeks)
 # min(RFMFeatureSegs$Recency_weeks)
 # 
@@ -72,7 +120,7 @@ require(vcd)
 
 #Get the feature dataset
 RFMDerivedFeatures <- read.csv('C:/Users/Sriva/Desktop/GeorgeMason/Spring2017/DAEN690/R Scripts/RFMDerivedFeatures.csv', sep = ',')
-#colnames(RFMDerivedFeatures) <- c('Age','FrequencySegments','RecencySegments','MonetarySegments','TenureSegments','BreadthSegments','CategoryBreadth','CustomerId','FirstName','FirstPurchaseDate','Frequency','Gender','Generation','LastName','LastPurchaseDate','MonetaryValue','Recency','Region','Tenure','TotalAmount','TotalItems','UndiscountedTotalSales','UniqueItems')
+#colnames(RFMDerivedFeatures) <- c('Age','FrequencyS+egments','RecencySegments','MonetarySegments','TenureSegments','BreadthSegments','CategoryBreadth','CustomerId','FirstName','FirstPurchaseDate','Frequency','Gender','Generation','LastName','LastPurchaseDate','MonetaryValue','Recency','Region','Tenure','TotalAmount','TotalItems','UndiscountedTotalSales','UniqueItems')
 #head(RFMDerivedFeatures)
 
 RFMDerivedFeatures <- RFMDerivedFeatures[order(RFMDerivedFeatures$FrequencySegments,RFMDerivedFeatures$RecencySegments),]
@@ -141,5 +189,4 @@ RFMDerivedFeatures$CustomerCategory <- ifelse((RFMDerivedFeatures$FrequencySegme
 
 
 RFMDerivedFeatures[RFMDerivedFeatures$FrequencySegments == '1-2 times',]
-
 
